@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "noesis"
+version = "0.1.0"
+description = "Noesis: model tracing and soulprint tools"
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "James Jones" }]
+license = "MIT"
+dependencies = ["torch","transformers","numpy","matplotlib"]
+
+[project.scripts]
+noesis = "noesis.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["noesis*"]
+exclude = ["noesis_out*", "tests*", "docs*", "examples*"]
