@@ -22,7 +22,9 @@ _Noesis_ is a small research/portfolio project that instruments the **Stable Dif
 
 ## Why this exists
 
-Model development is full of _“is this the same model?”_ moments. When you fine‑tune, swap schedulers, or change prompts/CFG/seeds, you need quick, comparable **signatures** of what changed internally. Noesis provides a **trace → summarize → compare** pipeline so you can answer that question across runs without shipping large tensors or saving entire graphs.
+While Noesis began as a diffusion introspection tool, its tracer also supports language models such as Mistral-7B-v0.1.
+This allows you to compare how text and image models think — different architectures, same lens.
+One codebase, two modalities, one question: what does the network remember of its own dreaming?
 
 ---
 
