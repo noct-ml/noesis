@@ -8,7 +8,12 @@
   <img alt="Status" src="https://img.shields.io/badge/Portfolio%20Project-✓-purple.svg">
 </p>
 
+**[noesis.png](./noesis.png)**
+
  — UNet Tracing & “Soulprints” for SDXL
+ 
+<p align="center">
+
 
 _Noesis_ is a small research/portfolio project that instruments the **Stable Diffusion XL (SDXL) U‑Net** and extracts lightweight statistics from intermediate activations during image generation. Those statistics are aggregated into a compact vector — a **soulprint** — that summarizes a run. You can:
 - **Trace** SDXL U‑Net layers during a generation run.
@@ -45,7 +50,8 @@ One codebase, two modalities, one question: what does the network remember of it
 > **v0.1 (portfolio)** — functional tracer and summarizer with comparison utilities. API is intentionally small and may evolve. Good for demonstration, reproducible mini‑experiments, and as scaffolding for deeper research.
 
 ---
-
+Forensic introspection for generative models
+Traces the hidden currents of cognition - from LLM reasoning to diffusion flows - mapping activation fields, MoE routes, and soulprints of thought.
 ## Repo structure
 
 ```
