@@ -8,10 +8,9 @@
   <img alt="Status" src="https://img.shields.io/badge/Portfolio%20Project-✓-purple.svg">
 </p>
 
-**[noesis.png](./noesis.png)**
+![UNet Tracing & “Soulprints” for SDXL](./noesis.png)
 
- — UNet Tracing & “Soulprints” for SDXL
- 
+
 <p align="center">
 
 
