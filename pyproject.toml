@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "James Jones" }]
 license = "MIT"
-dependencies = ["torch","transformers","numpy","matplotlib"]
+dependencies = ["torch","transformers","numpy","matplotlib","tqdm","accelerate","diffusers[torch]","pandas"]
 
 [project.scripts]
 noesis = "noesis.cli:main"

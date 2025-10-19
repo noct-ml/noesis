@@ -41,7 +41,7 @@ One codebase, two modalities, one question: what does the network remember of it
 - **Soulprint writer**: turn traces into a compact vector with a stable layer index.
 - **Comparator utilities**: compute cosine similarity and top‑k salient layer differences.
 - **Visualization helpers**: quick Matplotlib heatmaps for token × layer deltas.
-
+- **MoE Tracing**: MoE model tracing to see MoE activation.
 ---
 
 ## Project status
@@ -60,9 +60,12 @@ noesis/
   unet_soulprint.py           # summarize traces → soulprint
   compare_unet_soulprints.py  # soulprint vs soulprint (cosine, top‑k deltas)
   soulprint_compare.py        # token×layer delta tools + heatmap
+  noesis_trace.py             # stand alone LLM tracing
   tracing/
     base_tracer.py            # abstract tracer interface
     unet_tracer.py            # SDXL U‑Net tracer (regex include, gzip, per‑step)
+  analysis/
+    moe_trace.py              # MoE model tracing  
   utils/
     io.py
     tensor_stats.py
@@ -78,7 +81,7 @@ examples/
 
 ```bash
 # minimal stack for tracing SDXL
-pip install torch diffusers transformers accelerate safetensors
+pip install torch diffusers transformers accelerate safetensors tqdm diffusers[torch]
 
 # analysis/visualization extras
 pip install numpy pandas matplotlib
@@ -101,6 +104,7 @@ python -m noesis.cli trace --help
 python -m noesis.cli unet-summarize --help
 python -m noesis.cli compare-unet-soulprints --help
 python -m noesis.cli soulprint-compare --help
+python -m noesis.cli trace-moe --help
 ```
 
 ### 1) Trace a run (SDXL)
@@ -138,6 +142,12 @@ python -m noesis.cli compare-unet-soulprints --a runs/trace_001/soulprint.json -
 ```
 
 You’ll get a small JSON/CSV summary (cosine similarity, top‑k layer deltas) suitable for dashboards or PR comments.
+
+
+### Run MoE model tracing
+```bash
+python cli.py trace-moe --model mistralai/Mixtral-8x7B-v0.1 --prompt "Your prompt here" --out-dir traces
+```
 
 ---
 

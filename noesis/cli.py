@@ -7,15 +7,19 @@ from pathlib import Path
 try:
     import torch
     from diffusers import StableDiffusionXLPipeline
+    from transformers import AutoModelForCausalLM, AutoTokenizer
 except Exception:  # keep CLI usable for compare-only workflows
     torch = None
     StableDiffusionXLPipeline = None
+    AutoModelForCausalLM = None
+    AutoTokenizer = None
 
 # Local imports
 from .tracing.unet_tracer import UNetTracer
 from .unet_soulprint import write_unet_soulprint
 from .compare_unet_soulprints import compare_unet_soulprints
 from .soulprint_compare import compare_soulprints  # flat vector compare
+from .analysis.moe_trace import trace_moe
 
 # ---------- helpers ----------
 
@@ -24,6 +28,13 @@ def _ensure_torch():
         raise RuntimeError(
             "Tracing requires torch and diffusers. Install e.g.\n"
             "  pip install 'torch' 'diffusers[torch]' 'transformers' 'accelerate'\n"
+        )
+
+def _ensure_torch_transformers():
+    if torch is None or AutoModelForCausalLM is None or AutoTokenizer is None:
+        raise RuntimeError(
+            "MoE tracing requires torch and transformers. Install e.g.\n"
+            "  pip install 'torch' 'transformers' 'tqdm'\n"
         )
 
 def _default_subparser(parser: argparse.ArgumentParser, subparsers, default: str):
@@ -149,6 +160,12 @@ def cmd_soulprint_compare(args: argparse.Namespace) -> None:
         Path(args.json_summary).write_text(json.dumps(summary, indent=2))
         print("[noesis] wrote summary:", args.json_summary)
 
+def cmd_trace_moe(args: argparse.Namespace) -> None:
+    _ensure_torch_transformers()
+    print(f"[noesis] Running MoE trace for model: {args.model}")
+    trace_file = trace_moe(args.model, args.prompt, args.out_dir)
+    print(f"[noesis] Trace saved to: {trace_file}")
+
 # ---------- parser ----------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -171,8 +188,7 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--sample-limit", type=int, default=64, help="Max sample elements per record")
     t.add_argument("--no-gzip", action="store_true", help="Disable gzip compression for logs")
     t.add_argument("--no-per-step", action="store_true", help="Write a single log file instead of per-step files")
-    t.add_argument("--emit-unet-soulprint", action="store_true",
-                   help="After tracing, auto-summarize per-step logs into a compact UNet soulprint JSON")
+    t.add_argument("--emit-unet-soulprint", action="store_true", help="After tracing, auto-summarize per-step logs into a compact UNet soulprint JSON")
 
     # UNET → SOULPRINT
     sp = subparsers.add_parser("unet-summarize", help="Summarize per-step UNet traces into a compact soulprint JSON")
@@ -195,6 +211,27 @@ def build_parser() -> argparse.ArgumentParser:
     f.add_argument("--csv", type=str, default=None)
     f.add_argument("--json-summary", type=str, default=None)
 
+    # TRACE MoE
+    mt = subparsers.add_parser("trace-moe", help="Trace MoE model layers and gate decisions")
+    mt.add_argument(
+        "--model",
+        type=str,
+        default="mistralai/Mixtral-8x7B-v0.1",
+        help="Name of the MoE model (e.g., 'mistralai/Mixtral-8x7B-v0.1')"
+    )
+    mt.add_argument(
+        "--prompt",
+        type=str,
+        default="Generate a detailed list of all the paradoxes related to quantum logic, causality loops, and metaphysical recursion in simulation theory.",
+        help="Input prompt for MoE tracing"
+    )
+    mt.add_argument(
+        "--out-dir",
+        type=str,
+        default="traces",
+        help="Directory to save trace JSON file"
+    )
+
     return p
 
 def main():
@@ -211,6 +248,8 @@ def main():
         return cmd_compare_unet_soulprints(args)
     elif args.command == "soulprint-compare":
         return cmd_soulprint_compare(args)
+    elif args.command == "trace-moe":
+        return cmd_trace_moe(args)
 
     parser.print_help()
 

@@ -24,7 +24,7 @@ def compare_soulprints(trace_a, trace_b):
         a_layer = np.array(trace_a[layer])  # could be (1, tokens, 4096)
         b_layer = np.array(trace_b[layer])
 
-        print(f"🔍 DEBUG: Layer {layer} shapes -> a: {a_layer.shape}, b: {b_layer.shape}")
+        print(f" DEBUG: Layer {layer} shapes -> a: {a_layer.shape}, b: {b_layer.shape}")
 
         # Squeeze batch dim if present
         if len(a_layer.shape) == 3:
@@ -32,13 +32,13 @@ def compare_soulprints(trace_a, trace_b):
         if len(b_layer.shape) == 3:
             b_layer = b_layer.squeeze(0)
 
-        print(f"✅ Squeezed -> a: {a_layer.shape}, b: {b_layer.shape}")
+        print(f" Squeezed -> a: {a_layer.shape}, b: {b_layer.shape}")
 
         # Mean pooling
         a = a_layer.mean(axis=0)
         b = b_layer.mean(axis=0)
 
-        print(f"✅ Pooled -> a: {a.shape}, b: {b.shape}")
+        print(f" Pooled -> a: {a.shape}, b: {b.shape}")
 
         # Cosine similarity
         cosine_sim = np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b) + 1e-8)
