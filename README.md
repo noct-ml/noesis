@@ -146,7 +146,7 @@ You’ll get a small JSON/CSV summary (cosine similarity, top‑k layer deltas) 
 
 ### Run MoE model tracing
 ```bash
-python cli.py trace-moe --model mistralai/Mixtral-8x7B-v0.1 --prompt "Your prompt here" --out-dir traces
+python -m noesis.cli trace-moe --model mistralai/Mixtral-8x7B-v0.1 --prompt "Your prompt here" --out-dir traces
 ```
 
 ---
