@@ -8,7 +8,7 @@
   <img alt="Status" src="https://img.shields.io/badge/Portfolio%20Project-✓-purple.svg">
 </p>
 
-![UNet Tracing & “Soulprints” for SDXL](./noesis.png)
+![UNet, LLM and MoE Tracing](./noesis.png)
 
 
 <p align="center">
@@ -42,6 +42,7 @@ One codebase, two modalities, one question: what does the network remember of it
 ## Features
 
 - **UNetTracer**: a minimal hook‑based tracer focused on SDXL U‑Net blocks (down/mid/up).
+- **NoesisTracer**: hook-based tracer focused on LLM model layers.
 - **Per‑step or single‑file modes**: store every step separately _or_ aggregate after the run.
 - **Configurable include patterns**: regex control over which submodules to watch.
 - **Compressed outputs**: optional `.json.gz` for traces.
@@ -172,6 +173,11 @@ You’ll get a small JSON/CSV summary (cosine similarity, top‑k layer deltas) 
 ### Run MoE model tracing
 ```bash
 python -m noesis.cli trace-moe --model mistralai/Mixtral-8x7B-v0.1 --prompt "Your prompt here" --out-dir traces
+```
+
+### Run LLM model tracing
+```bash
+python -m noesis.cli trace-llm --prompts "The satellite will engage the target at dawn." "The satellite will engage its target at dusk." --out-dir traces
 ```
 
 ---
