@@ -3,14 +3,13 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import defaultdict
+from sklearn.metrics.pairwise import cosine_similarity
 
 def natural_layer_key(name: str):
     parts = []
     for tok in name.replace('.', ' ').split():
         parts.append(int(tok) if tok.isdigit() else tok)
     return parts
-
-
 
 def load_trace(path):
     with open(path, 'r') as f:
@@ -218,3 +217,101 @@ def plot_token_delta_snapshots(deltas, token_strings=None, title="Delta Snapshot
     plt.ylabel("Cosine Distance (Δ)")
     plt.tight_layout()
     plt.show()
+
+try:
+    from scipy.ndimage import gaussian_filter
+    def blur(img, sigma): return gaussian_filter(img, sigma=sigma)
+except Exception:
+    def blur(img, k=7):
+        # simple box blur fallback (odd kernel size)
+        p = k // 2
+        pad = np.pad(img, p, mode="edge")
+        out = np.zeros_like(img, dtype=float)
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                out[i, j] = pad[i:i+k, j:j+k].mean()
+        return out
+        
+def compute_tokenwise_divergence(trace_a, trace_b):
+    """
+    Compute 1 - cosine similarity per token and layer
+    trace_a and trace_b should have shape [layers][tokens, hidden_dim]
+    """
+    n_layers = len(trace_a)
+    n_tokens = trace_a[0].shape[0]
+    divergence = np.zeros((n_layers, n_tokens))
+
+    for l in range(n_layers):
+        # cosine similarity per token across the two traces
+        sim = np.diag(cosine_similarity(trace_a[l], trace_b[l]))
+        divergence[l, :] = 1.0 - sim  # convert to divergence
+
+    return divergence
+
+
+def plot_divergence_with_glow(
+    div,                      # 2D array: [layers, tokens], values in [0, 1 - cosine_sim]
+    tokens=None,              # list of token strings for x labels
+    layer_labels=None,        # list of layer labels for y labels
+    glow_percentile=88,       # which top-percentile to glow
+    glow_sigma=3.0,           # blur strength for the glow
+    glow_intensity=0.85,      # max alpha of the glow overlay
+    figsize=(12, 5)
+):
+    # normalize (robust) to [0,1]
+    vmin = np.percentile(div, 1)
+    vmax = np.percentile(div, 99)
+    normed = np.clip((div - vmin) / max(vmax - vmin, 1e-8), 0, 1)
+
+    # 1) base heatmap (pick a dark-friendly cmap; inferno reads well on black)
+    fig, ax = plt.subplots(figsize=figsize, facecolor="black")
+    ax.set_facecolor("black")
+    im = ax.imshow(normed, aspect="auto", cmap="inferno", interpolation="nearest")
+
+    # 2) inner-glow mask: focus on *high* divergence areas
+    thresh = np.percentile(normed, glow_percentile)
+    mask = (normed >= thresh).astype(float)
+
+    # soften edges -> glow
+    glow = blur(mask, sigma=glow_sigma) if 'gaussian_filter' in globals() else blur(mask, k=7)
+
+    # rescale glow to [0, glow_intensity]
+    if glow.max() > 0:
+        glow_alpha = glow / glow.max() * glow_intensity
+    else:
+        glow_alpha = glow  # all zeros
+
+    # 3) overlay glow in MAUVE 💜
+    # a nice mauve-ish RGB; tweak to taste
+    mauve = (0.74, 0.52, 0.74)  # ~#BD85BD
+    glow_rgb = np.dstack([np.full_like(glow, mauve[0]),
+                          np.full_like(glow, mauve[1]),
+                          np.full_like(glow, mauve[2])])
+
+    ax.imshow(glow_rgb, aspect="auto", interpolation="bilinear", alpha=glow_alpha)
+
+    # 4) cosmetics
+    ax.set_title("Token-wise Divergence per Layer", color="white")
+    ax.tick_params(colors="white", labelsize=9)
+
+    if tokens is not None:
+        ax.set_xticks(range(len(tokens)))
+        ax.set_xticklabels(tokens, rotation=45, ha="right", color="white")
+    else:
+        ax.set_xlabel("Token", color="white")
+
+    if layer_labels is not None:
+        ax.set_yticks(range(len(layer_labels)))
+        ax.set_yticklabels(layer_labels, color="white")
+    else:
+        ax.set_ylabel("Layer", color="white")
+
+    # colorbar that also fits on black
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.ax.yaxis.set_tick_params(color="white")
+    plt.setp(cbar.ax.get_yticklabels(), color="white")
+    cbar.set_label("1 - Cosine Similarity", color="white")
+
+    plt.tight_layout()
+    return fig, ax
+    

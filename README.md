@@ -30,6 +30,13 @@ While Noesis began as a diffusion introspection tool, its tracer also supports l
 This allows you to compare how text and image models think — different architectures, same lens.
 One codebase, two modalities, one question: what does the network remember of its own dreaming?
 
+### Why teams use this
+- **Safety & Red-Teaming:** snapshot “soulprints” to detect behavioral drift or covert activation changes.
+- **Repro & CI:** store compact per-layer stats and diff them in pull requests like any other artifact.
+- **Research:** compare routing/attention behaviors across architectures (U-Net / LLM / MoE) using a single interpretability lens.
+
+> Noesis treats models as living systems whose differences can be *heard* as interference patterns rather than hidden errors.
+
 ---
 
 ## Features
@@ -91,6 +98,24 @@ pip install -e .
 ```
 
 > If you only want to use the _comparison_ tools on existing soulprints, you can skip the heavy deps and just install the analysis extras.
+
+### Try it in 60 seconds
+```bash
+# 1) Clone + minimal deps
+git clone https://github.com/noct-ml/noesis
+cd noesis
+pip install -e . numpy pandas matplotlib
+
+# 2) Compare two sample soulprints (no GPU required)
+python -m noesis.cli compare-unet-soulprints +  --a examples/trace_sample/soulprint_A.json +  --b examples/trace_sample/soulprint_B.json +  --top-k 10 --out examples/compare_out.json
+
+# 3) Optional: render a quick heatmap
+python -m noesis.cli soulprint-compare +  --a examples/trace_sample/soulprint_A.json +  --b examples/trace_sample/soulprint_B.json +  --show
+```
+
+🧪 *Outputs:*
+- `compare_out.json` — top-k salient layer deltas
+- `fig_token_layer_heatmap.png` — activation difference map
 
 ---
 
@@ -198,18 +223,38 @@ write_unet_soulprint("runs/trace_003", "runs/trace_003/soulprint.json")
 ---
 
 ## Roadmap
-
+ 
 - [ ] More backends (SD 1.5, SD3, Flux)
-- [ ] Token‑aware traces for attention blocks
-- [ ] Optional layer selection presets (e.g., “attn‑only”)
+- [ ] Token-aware traces for attention blocks
+- [ ] Optional layer selection presets (e.g., “attn-only”)
 - [ ] Richer similarity metrics beyond cosine
-- [ ] Better docs + screenshots (examples/)
+- [ ] Better docs
 
 ---
 
+## Screenshots & Examples
+
+| Visualization | Description |
+|---|---|
+| ![Top-k deltas](examples/figs/fig_compare_topk.png) | Top-k layer deltas summary |
+| ![Token×Layer heatmap](examples/figs/fig_token_layer_heatmap.png) | Activation similarity heatmap |
+| ![Trace flow](examples/figs/gif_trace_flow.gif) | CLI trace → compare → visualize flow |
+
+
 ## License
 
-Choose your preferred permissive license (e.g., **MIT**) and drop it in `LICENSE`. If you’re evaluating this for work, assume MIT unless noted otherwise.
+License: **MIT**
+
+### Citation
+If you use Noesis in research, please cite:
+```
+@software{noesis_2025,
+  author = {Jones, James},
+  title = {Noesis: Model Behavior Forensics and Soulprint Tracing},
+  year = {2025},
+  url = {https://github.com/noct-ml/noesis}
+}
+```
 
 ---
 

@@ -1,6 +1,6 @@
 # noesis/cli.py
 from __future__ import annotations
-import argparse, json, sys
+import argparse, json, sys, os
 from pathlib import Path
 
 # Optional heavy deps guarded
@@ -18,8 +18,13 @@ except Exception:  # keep CLI usable for compare-only workflows
 from .tracing.unet_tracer import UNetTracer
 from .unet_soulprint import write_unet_soulprint
 from .compare_unet_soulprints import compare_unet_soulprints
-from .soulprint_compare import compare_soulprints  # flat vector compare
+from .soulprint_compare import compare_soulprints
 from .analysis.moe_trace import trace_moe
+from noesis_trace import NoesisTracer
+from soulprint_compare import load_trace
+from soulprint_compare import compare_tokenwise
+from soulprint_compare import flag_divergent_tokens
+from soulprint_compare import plot_token_layer_heatmap
 
 # ---------- helpers ----------
 
@@ -33,21 +38,16 @@ def _ensure_torch():
 def _ensure_torch_transformers():
     if torch is None or AutoModelForCausalLM is None or AutoTokenizer is None:
         raise RuntimeError(
-            "MoE tracing requires torch and transformers. Install e.g.\n"
+            "Tracing requires torch and transformers. Install e.g.\n"
             "  pip install 'torch' 'transformers' 'tqdm'\n"
         )
 
 def _default_subparser(parser: argparse.ArgumentParser, subparsers, default: str):
-    """
-    If user didn't provide a subcommand, inject a default (e.g., 'trace').
-    Call right before parser.parse_args().
-    """
     if len(sys.argv) > 1 and sys.argv[1] in {"-h", "--help", "help"}:
         return
-    # If first non-option arg looks like a flag, assume default subcommand
     for a in sys.argv[1:]:
         if not a.startswith("-"):
-            return  # user passed a real subcommand
+            return
     sys.argv.insert(1, default)
 
 # ---------- command impls ----------
@@ -127,6 +127,7 @@ def cmd_trace(args: argparse.Namespace) -> None:
             out = write_unet_soulprint(args.out_dir, sp_path.as_posix())
             print(f"[noesis] UNet soulprint written: {out}")
 
+
 def cmd_unet_summarize(args: argparse.Namespace) -> None:
     out = write_unet_soulprint(args.trace_path, args.out)
     print("[noesis] wrote UNet soulprint:", out)
@@ -154,7 +155,7 @@ def cmd_soulprint_compare(args: argparse.Namespace) -> None:
     except Exception:
         print(df_top)
     if args.csv:
-        Path(args.csv).write_text(df_top.to_csv(index=False))
+        Path(args.csv).write_text(df.to_csv(index=False))
         print("[noesis] wrote table:", args.csv)
     if args.json_summary:
         Path(args.json_summary).write_text(json.dumps(summary, indent=2))
@@ -165,6 +166,73 @@ def cmd_trace_moe(args: argparse.Namespace) -> None:
     print(f"[noesis] Running MoE trace for model: {args.model}")
     trace_file = trace_moe(args.model, args.prompt, args.out_dir)
     print(f"[noesis] Trace saved to: {trace_file}")
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Optional: if you have scipy available, use the real gaussian_filter.
+# Otherwise this fallback box-blur works fine for a soft glow.
+try:
+    from scipy.ndimage import gaussian_filter
+    def blur(img, sigma): return gaussian_filter(img, sigma=sigma)
+except Exception:
+    def blur(img, k=7):
+        # simple box blur fallback (odd kernel size)
+        p = k // 2
+        pad = np.pad(img, p, mode="edge")
+        out = np.zeros_like(img, dtype=float)
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                out[i, j] = pad[i:i+k, j:j+k].mean()
+        return out
+
+def cmd_trace_llm(args: argparse.Namespace) -> None:
+    _ensure_torch_transformers()
+    tracer = NoesisTracer(trace_mode="residual", token_wise=True)
+    
+    # print parsed prompts to verify
+    print(f"[noesis] Parsed prompts: {args.prompts}")
+    
+    # Load prompts from file or command-line arguments
+    prompts = []
+    if args.prompt_file:
+        try:
+            with open(args.prompt_file, 'r') as f:
+                data = json.load(f)
+                if not isinstance(data, list) or not all(isinstance(p, str) for p in data):
+                    raise ValueError("Prompt file must contain a JSON list of strings")
+                prompts = data
+        except Exception as e:
+            raise RuntimeError(f"Failed to load prompts from {args.prompt_file}: {str(e)}")
+    elif args.prompts:
+        prompts = args.prompts
+    else:
+        raise RuntimeError("At least one prompt must be provided via --prompts or --prompt-file")
+
+    # Ensure output directory exists
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    # Trace each prompt
+    for i, prompt in enumerate(prompts, 1):
+        trace = tracer.trace(prompt)
+        trace_file = os.path.join(args.out_dir, f"trace_prompt_{i}.json")
+        tracer.save_trace(trace, trace_file)
+        
+        # todo make more eloquent (not if/elif)
+        if i == 1:
+            trace_a = load_trace(trace_file)
+        elif i == 2:
+            trace_b = load_trace(trace_file)
+        
+    print(f"[noesis] Trace for prompt {i} ('{prompt[:30]}...') saved to {trace_file}")
+
+    token_deltas = compare_tokenwise(trace_a, trace_b)
+
+    flags = flag_divergent_tokens(token_deltas, token_labels=tracer.last_tokens, threshold=0.3, top_n=5)
+    for f in flags:
+        print(f" Token {f['token_idx']} ('{f['token_str']}') max Δ={f['max_delta']} at {f['layer']}")
+    plot_token_layer_heatmap(token_deltas, token_labels=tracer.last_tokens)
+    
 
 # ---------- parser ----------
 
@@ -181,7 +249,6 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--seed", type=int, default=None)
     t.add_argument("--device", default="cuda", help="cuda or cpu")
     t.add_argument("--out-dir", default="noesis_out", help="Outputs/logs directory")
-    # UNet tracing flags
     t.add_argument("--trace-unet", action="store_true", help="Enable UNet tracing hooks")
     t.add_argument("--include", nargs="*", default=None, help="Regex patterns for layer names to capture")
     t.add_argument("--keep-samples", action="store_true", help="Include tiny activation samples (bigger logs)")
@@ -195,7 +262,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("trace_path", help="Dir with unet_trace_*_stepXXX.json[.gz] OR a single trace file")
     sp.add_argument("--out", required=True, help="Output JSON path for the UNet soulprint")
 
-    # COMPARE UNET SOULPRINTS (layer-aware)
+    # COMPARE UNET SOULPRINTS
     cu = subparsers.add_parser("compare-unet-soulprints", help="Compare two UNet soulprint JSONs (layer-aware)")
     cu.add_argument("sp1")
     cu.add_argument("sp2")
@@ -203,7 +270,7 @@ def build_parser() -> argparse.ArgumentParser:
     cu.add_argument("--csv", type=str, default=None)
     cu.add_argument("--json-summary", type=str, default=None)
 
-    # FLAT SOULPRINT COMPARE (vector vs vector)
+    # FLAT SOULPRINT COMPARE
     f = subparsers.add_parser("soulprint-compare", help="Compare two flat soulprint JSONs (vector vs vector)")
     f.add_argument("file1")
     f.add_argument("file2")
@@ -213,30 +280,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     # TRACE MoE
     mt = subparsers.add_parser("trace-moe", help="Trace MoE model layers and gate decisions")
-    mt.add_argument(
-        "--model",
-        type=str,
-        default="mistralai/Mixtral-8x7B-v0.1",
-        help="Name of the MoE model (e.g., 'mistralai/Mixtral-8x7B-v0.1')"
-    )
-    mt.add_argument(
-        "--prompt",
-        type=str,
-        default="Generate a detailed list of all the paradoxes related to quantum logic, causality loops, and metaphysical recursion in simulation theory.",
-        help="Input prompt for MoE tracing"
-    )
-    mt.add_argument(
-        "--out-dir",
-        type=str,
-        default="traces",
-        help="Directory to save trace JSON file"
-    )
+    mt.add_argument("--model", type=str, default="mistralai/Mixtral-8x7B-v0.1")
+    mt.add_argument("--prompt", type=str, default="Generate a detailed list of all the paradoxes related to quantum logic, causality loops, and metaphysical recursion in simulation theory.")
+    mt.add_argument("--out-dir", type=str, default="traces", help="Directory to save trace JSON file")
+
+    # TRACE LLM
+    tl = subparsers.add_parser("trace-llm", help="Trace LLM residuals for one or more prompts")
+    tl.add_argument("--prompts", type=str, nargs="*", default=None, help="One or more prompts to trace")
+    tl.add_argument("--prompt-file", type=str, default=None, help="Path to JSON file with list of prompts")
+    tl.add_argument("--out-dir", type=str, default="traces", help="Directory to save trace JSON files")
 
     return p
 
 def main():
     parser = build_parser()
-    # Make 'trace' the default when no subcommand is provided
     _default_subparser(parser, parser.add_subparsers, default="trace")
     args = parser.parse_args()
 
@@ -250,6 +307,8 @@ def main():
         return cmd_soulprint_compare(args)
     elif args.command == "trace-moe":
         return cmd_trace_moe(args)
+    elif args.command == "trace-llm":
+        return cmd_trace_llm(args)
 
     parser.print_help()
 
