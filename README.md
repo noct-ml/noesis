@@ -1,5 +1,5 @@
-# Noesis
-
+# Noesis — LLM Forensic Tracing & Soulprint Analysis
+*A lightweight toolkit for inspecting transformer internals through residual traces, layer-wise drift metrics, and token-level activation deltas.*
 
 <p align="center">
   <a href="https://www.python.org/"><img alt="Python" src="https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white"></a>
@@ -8,263 +8,172 @@
   <img alt="Status" src="https://img.shields.io/badge/Portfolio%20Project-✓-purple.svg">
 </p>
 
-![UNet, LLM and MoE Tracing](./noesis.png)
+## Overview
+Noesis is a focused forensic toolkit for LLM internal inspection.  
+It provides:
 
+- **Residual stream tracing** for any HuggingFace transformer  
+- **Layerwise soulprint comparison** between two model runs  
+- **Tokenwise activation delta analysis** for fine-grained anomaly detection  
+- **Optional MoE gate tracing** (Mixtral, Phi-MoE, etc.)  
+- **CLI-first design** for quick experimentation
 
-<p align="center">
-
-
-_Noesis_ is a small research/portfolio project that instruments the **Stable Diffusion XL (SDXL) U‑Net** and extracts lightweight statistics from intermediate activations during image generation. Those statistics are aggregated into a compact vector — a **soulprint** — that summarizes a run. You can:
-- **Trace** SDXL U‑Net layers during a generation run.
-- **Summarize** per‑layer activation stats into a single fixed‑length vector (“soulprint”).
-- **Compare** two runs/snapshots by cosine similarity and per‑layer deltas.
-- **Visualize** token × layer deltas as quick heatmaps (optional).
-
-> Portfolio‑oriented: clean structure, clear CLI, minimal dependencies, and practical code that shows systems thinking (hooks, summaries, comparisons) without heavy ceremony.
-
----
-
-## Why this exists
-
-While Noesis began as a diffusion introspection tool, its tracer also supports language models such as Mistral-7B-v0.1.
-This allows you to compare how text and image models think — different architectures, same lens.
-One codebase, two modalities, one question: what does the network remember of its own dreaming?
-
-### Why teams use this
-- **Safety & Red-Teaming:** snapshot “soulprints” to detect behavioral drift or covert activation changes.
-- **Repro & CI:** store compact per-layer stats and diff them in pull requests like any other artifact.
-- **Research:** compare routing/attention behaviors across architectures (U-Net / LLM / MoE) using a single interpretability lens.
-
-> Noesis treats models as living systems whose differences can be *heard* as interference patterns rather than hidden errors.
-
----
+The goal is simple:  
+**make transformer internal behavior observable, comparable, and explainable.**
 
 ## Features
+### Residual Trace Capture
+Capture per-layer, per-token residual activations from any HF transformer:
 
-- **UNetTracer**: a minimal hook‑based tracer focused on SDXL U‑Net blocks (down/mid/up).
-- **NoesisTracer**: hook-based tracer focused on LLM model layers.
-- **Per‑step or single‑file modes**: store every step separately _or_ aggregate after the run.
-- **Configurable include patterns**: regex control over which submodules to watch.
-- **Compressed outputs**: optional `.json.gz` for traces.
-- **Soulprint writer**: turn traces into a compact vector with a stable layer index.
-- **Comparator utilities**: compute cosine similarity and top‑k salient layer differences.
-- **Visualization helpers**: quick Matplotlib heatmaps for token × layer deltas.
-- **MoE Tracing**: MoE model tracing to see MoE activation.
----
+- Outputs JSON trace files  
+- Per-layer activation structure  
+- Grab both tokenwise matrices and pooled representations  
 
-## Project status
+### Soulprint Comparison
+Compare the “soulprint” of two model runs:
 
-> **v0.1 (portfolio)** — functional tracer and summarizer with comparison utilities. API is intentionally small and may evolve. Good for demonstration, reproducible mini‑experiments, and as scaffolding for deeper research.
+- **Layerwise cosine drift** (`1 - cos_sim`)  
+- Sorted delta table  
+- Top-layer divergence ranking  
+- Clean JSON + optional CSV export
 
----
-Forensic introspection for generative models
-Traces the hidden currents of cognition - from LLM reasoning to diffusion flows - mapping activation fields, MoE routes, and soulprints of thought.
-## Repo structure
+Useful for detecting:
 
-```
-noesis/
-  __init__.py
-  cli.py                      # CLI entry points (trace, summarize, compare)
-  unet_soulprint.py           # summarize traces → soulprint
-  compare_unet_soulprints.py  # soulprint vs soulprint (cosine, top‑k deltas)
-  soulprint_compare.py        # token×layer delta tools + heatmap
-  noesis_trace.py             # stand alone LLM tracing
-  tracing/
-    base_tracer.py            # abstract tracer interface
-    unet_tracer.py            # SDXL U‑Net tracer (regex include, gzip, per‑step)
-  analysis/
-    moe_trace.py              # MoE model tracing  
-  utils/
-    io.py
-    tensor_stats.py
-docs/
-examples/
-```
+- behavioral drift  
+- prompt-induced shifts  
+- instabilities  
+- trigger effects  
+- subtle distribution changes
 
----
+### Tokenwise Delta Heatmaps
+Compare activations token-by-token across layers:
+
+- Token-by-layer cosine deltas  
+- Divergent-token detection  
+- Heatmap visualization  
+- Highlighting layers with abnormal response
+
+This is the most detailed forensic view Noesis provides.
+
+### MoE Gate Tracing (Optional)
+For MoE architectures (Mixtral, Phi-MoE):
+
+- Patch MoE gate modules  
+- Capture top-k expert selection  
+- Store softmax-normalized gate distributions  
+- Attach results to the JSON trace
+
+Dense models gracefully skip MoE logic.
 
 ## Installation
 
-> Requires **Python 3.10+**. Tracing requires **PyTorch** and **diffusers**; comparison utilities use **NumPy/Pandas/Matplotlib**.
-
 ```bash
-# minimal stack for tracing SDXL
-pip install torch diffusers transformers accelerate safetensors tqdm diffusers[torch]
-
-# analysis/visualization extras
-pip install numpy pandas matplotlib
-
-# (optional) install this repo in editable mode
+git clone https://github.com/noct-ml/noesis.git
+cd noesis
 pip install -e .
 ```
 
-> If you only want to use the _comparison_ tools on existing soulprints, you can skip the heavy deps and just install the analysis extras.
+Dependencies:  
+- torch  
+- transformers  
+- huggingface_hub  
+- tqdm  
+- numpy  
+- matplotlib
 
-### Try it in 60 seconds
-```bash
-# 1) Clone + minimal deps
-git clone https://github.com/noct-ml/noesis
-cd noesis
-pip install -e . numpy pandas matplotlib
+Optional:  
+- hf_transfer (if user has HF fast-transfer enabled)
 
-# 2) Compare two sample soulprints (no GPU required)
-python -m noesis.cli compare-unet-soulprints +  --a examples/trace_sample/soulprint_A.json +  --b examples/trace_sample/soulprint_B.json +  --top-k 10 --out examples/compare_out.json
+## HuggingFace Authentication
 
-# 3) Optional: render a quick heatmap
-python -m noesis.cli soulprint-compare +  --a examples/trace_sample/soulprint_A.json +  --b examples/trace_sample/soulprint_B.json +  --show
+Some models require authentication (e.g., Mistral, Mixtral).  
+If Noesis cannot download a model, you’ll see:
+
+```
+RuntimeError: HuggingFace authentication is required...
 ```
 
-🧪 *Outputs:*
-- `compare_out.json` — top-k salient layer deltas
-- `fig_token_layer_heatmap.png` — activation difference map
-
----
-
-## CLI quickstart
-
-The CLI is intentionally small. Run `--help` for authoritative flags and updates:
+Fix:
 
 ```bash
-python -m noesis.cli --help
-python -m noesis.cli trace --help
-python -m noesis.cli unet-summarize --help
-python -m noesis.cli compare-unet-soulprints --help
-python -m noesis.cli soulprint-compare --help
-python -m noesis.cli trace-moe --help
+huggingface-cli login
 ```
 
-### 1) Trace a run (SDXL)
+Or set:
 
 ```bash
-python -m noesis.cli trace --model "stabilityai/stable-diffusion-xl-base-1.0" --prompt "a glass moth in mauve twilight, macro, film grain" --steps 30 --out "runs/trace_001" --per-step --gzip
+export HF_TOKEN=your_api_key
 ```
 
-This writes one JSON (or `.json.gz`) _per step_ under `runs/trace_001/` with light stats (shape, mean, std, abs_mean, min/max, dtype, device) for the selected U‑Net blocks.
+## Quickstart
 
-### 2) Summarize to a soulprint
-
+### 1. Trace two prompts
 ```bash
-python -m noesis.cli unet-summarize --trace "runs/trace_001" --out "runs/trace_001/soulprint.json"
+noesis trace-llm --prompts "hello world" "hello there"
 ```
 
-The output is a JSON with fields like:
+Outputs files:
 
-```json
-{
-  "type": "sdxl_unet_soulprint",
-  "run_id": "...",
-  "meta": {...},
-  "steps_aggregated": 30,
-  "layer_index": {"down_blocks.0.resnets.0": 0, "...": 1},
-  "vector_layout": "concat(means[0:L], stds[0:L])",
-  "soulprint": [0.0123, 0.0456, ...]
-}
+```
+traces/trace_prompt_1.json
+traces/trace_prompt_2.json
 ```
 
-### 3) Compare two soulprints
-
+### 2. Compare soulprints (layerwise)
 ```bash
-python -m noesis.cli compare-unet-soulprints --a runs/trace_001/soulprint.json --b runs/trace_002/soulprint.json --top-k 10
+noesis soulprint-compare traces/trace_prompt_1.json traces/trace_prompt_2.json
 ```
 
-You’ll get a small JSON/CSV summary (cosine similarity, top‑k layer deltas) suitable for dashboards or PR comments.
+### 3. Compare tokenwise activations (heatmap)
+Tracing two prompts via `trace-llm` also performs tokenwise comparison automatically.
 
-
-### Run MoE model tracing
+### 4. MoE tracing
 ```bash
-python -m noesis.cli trace-moe --model mistralai/Mixtral-8x7B-v0.1 --prompt "Your prompt here" --out-dir traces
+noesis trace-moe --model mistralai/Mixtral-8x7B-v0.1 --prompt "Explain entropy"
 ```
 
-### Run LLM model tracing
-```bash
-python -m noesis.cli trace-llm --prompts "The satellite will engage the target at dawn." "The satellite will engage its target at dusk." --out-dir traces
+## Command Reference
+
+### trace-llm
+Trace two or more prompts and compute soulprint deltas.
+
+Options:
+- --model – HF model ID (default: Mistral-7B)  
+- --prompts – direct CLI prompts  
+- --prompt-file – JSON list of prompts  
+- --out-dir – where traces are saved  
+
+### soulprint-compare
+Layerwise comparison between two trace JSONs.
+
+Options:
+- --csv – export table  
+- --json-summary – export stats  
+
+### trace-moe
+MoE expert gate tracing.
+
+## Repo Structure
+
+```
+noesis/
+  cli.py               - CLI entrypoints
+  noesis_trace.py      - Residual tracer core
+  soulprint_compare.py - Layerwise + tokenwise comparison utilities
+  analysis/
+    moe_trace.py       - MoE gate tracing logic
+  utils/
+    io.py
+    tensor_stats.py
 ```
 
----
+## Why Noesis?
+Because LLMs are black boxes — and black boxes hide patterns.  
+Noesis gives a clean, practical view into:
 
-## Python API (lightweight)
+- how residual streams evolve  
+- how prompts shift internal states  
+- how layers respond differently  
+- how MoE experts route decisions  
 
-You can also use the components directly:
-
-```python
-from noesis.tracing.unet_tracer import UNetTracer
-from noesis.unet_soulprint import write_unet_soulprint
-
-# assuming you already created a StableDiffusionXLPipeline called pipe
-tracer = UNetTracer(
-    unet=pipe.unet,
-    out_dir="runs/trace_003",
-    include_patterns=None,   # or provide regexes
-    keep_samples=False,
-    sample_limit=0,
-    meta={"prompt": "…", "seed": 42},
-    gzip_output=True,
-    per_step=True,
-)
-
-tracer.register()
-# ... run your generation steps here ...
-tracer.unregister()
-
-write_unet_soulprint("runs/trace_003", "runs/trace_003/soulprint.json")
-```
-
----
-
-## Outputs & formats
-
-- **Trace file(s):** `unet_trace_<run>.json` or `unet_trace_<run>_step<k>.json(.gz)`
-- **Soulprint:** JSON with `type=sdxl_unet_soulprint`, `layer_index`, and `soulprint` vector
-- **Comparison:** JSON/CSV with cosine similarity and top‑k salient layer deltas
-
----
-
-## Notes on design
-
-- **Tiny surface area:** hooks in, small stats out — easy to diff, diffable in PRs.
-- **Deterministic layout:** `layer_index` is persisted; vectors are concatenated as `[means | stds]`.
-- **Fast enough to iterate:** per‑step mode supports temporal analysis; single‑file mode is convenient for quick diffs.
-- **Guarded heavy imports:** CLI can still run comparison flows without torch/diffusers installed.
-
----
-
-## Roadmap
- 
-- [ ] More backends (SD 1.5, SD3, Flux)
-- [ ] Token-aware traces for attention blocks
-- [ ] Optional layer selection presets (e.g., “attn-only”)
-- [ ] Richer similarity metrics beyond cosine
-- [ ] Better docs
-
----
-
-## Screenshots & Examples
-
-| Visualization | Description |
-|---|---|
-| ![Top-k deltas](examples/figs/fig_compare_topk.png) | Top-k layer deltas summary |
-| ![Token×Layer heatmap](examples/figs/fig_token_layer_heatmap.png) | Activation similarity heatmap |
-| ![Trace flow](examples/figs/gif_trace_flow.gif) | CLI trace → compare → visualize flow |
-
-
-## License
-
-License: **MIT**
-
-### Citation
-If you use Noesis in research, please cite:
-```
-@software{noesis_2025,
-  author = {Jones, James},
-  title = {Noesis: Model Behavior Forensics and Soulprint Tracing},
-  year = {2025},
-  url = {https://github.com/noct-ml/noesis}
-}
-```
-
----
-
-## Author
-Built by **James Jones** — self‑taught technologist and symbolic‑systems researcher. I design tools at the seam between computation and meaning.  
-Say hi: https://github.com/noct-ml/
-
+It's built as a developer-facing analysis scaffold.
