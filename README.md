@@ -1,4 +1,4 @@
-# Noesis — LLM Forensic Tracing & Soulprint Analysis
+# Noesis — LLM Forensic Tracing & Soulprint Analysis - Demonstration Version - Not the full Noesis Tension Project
 *A lightweight toolkit for inspecting transformer internals through residual traces, layer-wise drift metrics, and token-level activation deltas.*
 
 <p align="center">
@@ -9,7 +9,6 @@
 </p>
 
 ## Overview
-This is a lightweight demonstration version - not the full Noesis Tension Project.
 Noesis is a focused forensic toolkit for LLM internal inspection.  
 It provides:
 
