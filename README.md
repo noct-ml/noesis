@@ -9,6 +9,7 @@
 </p>
 
 ## Overview
+This is a lightweight demonstration version - not the full Noesis Tension Project.
 Noesis is a focused forensic toolkit for LLM internal inspection.  
 It provides:
 
